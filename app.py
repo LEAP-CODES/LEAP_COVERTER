@@ -1,47 +1,142 @@
-from flask import Flask,flash, render_template,redirect,url_for,request,send_from_directory,send_file
+from flask import Flask,json ,flash, render_template,redirect,url_for,request,send_from_directory,send_file
 import docx2pdf
 import tempfile
 import pythoncom
 import os
+from PyPDF2 import PdfReader, PdfWriter,PaperSize
+from flask_restful import Api, Resource
 from pdf2docx import Converter,parse
 
 app = Flask(__name__)
+api = Api(app)
 app.config['UPLOAD_FOLDER']='uploads'
 app.secret_key = "LEapdf8sdufhbcsjkbh34586"
 
 @app.route('/')
 def index():
     return render_template('index.html')
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'doc', 'docx'}
+def allowed_file(filename, allowed_extensions):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
-@app.route('/ppttopdf',methods=['POST','GET'])
-def ppttopdf():
-    from pptx import Presentation
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
+class merging(Resource):
+    def post(self):
+        pythoncom.CoInitialize()
+        f = request.files
+class ResizePDF(Resource):
+    def post(self):
+        try:
+            # Get parameters from the request
+            page_size = request.form.get('page_size', 'A4')
+            file = request.files['file']
+
+            # Process PDF
+            pdf_reader = PdfReader(file)
+            original_page = pdf_reader._get_page(0)
+            print(page_size)
+
+            # Set dimensions based on page size
+            if page_size == "A4":
+                    newWidth, newHeight = PaperSize.A4.width, PaperSize.A4.height
+            elif page_size == "A5":
+                    newWidth, newHeight = PaperSize.A5.width, PaperSize.A5.height
+            elif page_size == "A3":
+                    newWidth, newHeight = PaperSize.A3.width, PaperSize.A3.height
+            else:
+                raise ValueError("Invalid page size specified")
+
+            pdf_writer = PdfWriter()
+            # Scale the copied page
+            for page_num in range(pdf_reader._get_num_pages()):
+                original_page = pdf_reader._get_page(page_num)
+                original_page.scale_to(newWidth, newHeight)
+                pdf_writer.add_page(original_page)
+            # Write the resized PDF to a new file
+            output_path = '/resized_output.pdf'
+            with open(output_path, 'wb+') as output_file:
+                pdf_writer.write(output_file)
+
+            return send_file(output_path, as_attachment=True, download_name=file.filename)
+
+        except Exception as e:
+            return {'error': str(e)}
+
+class WordToPdfResource(Resource):
+    def post(self):
+        pythoncom.CoInitialize()
+        f = request.files['file']
+        if f and allowed_file(f.filename, {'doc', 'docx'}):
+            file_name, file_extension = os.path.splitext(f.filename)
+            pdf_file_name = file_name + '.pdf'
+            tmp_dir = tempfile.mkdtemp()
+            uploaded_file_path = os.path.join(tmp_dir, f.filename)
+            f.save(uploaded_file_path)
+            pdf_file_path = os.path.join(tmp_dir, pdf_file_name)
+
+            docx2pdf.convert(uploaded_file_path, pdf_file_path)
+            
+            response_data = {
+                "message": "Conversion successful",
+                "pdf_url": pdf_file_path
+            }
+            return json.dumps(response_data, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)
+
+class PdfToWordResource(Resource):
+    def post(self):
+        f = request.files['pdffile']
+        if f and allowed_file(f.filename, {'pdf'}):
+            file = f.filename
+            tmp_dir = tempfile.mkdtemp()
+            uploaded_file_path = os.path.join(tmp_dir, file)
+            f.save(uploaded_file_path)
+            word_file_path = uploaded_file_path + '.docx'
+            cv = Converter(uploaded_file_path)
+            cv.convert(word_file_path, start=0, end=None)
+            response_data = {
+                "message": "Conversion successful",
+                "pdf_url": word_file_path
+            }
+            return json.dumps(response_data,200)
+        # else:
+        #     # Construct an error response
+        #     error_data = {
+        #         "error": "Invalid file format. Please upload a .doc or .docx file."
+        #     }
+            
+        #     return jsonify(error_data), 400
+
+api.add_resource(WordToPdfResource, '/AndroidWordTopdf')
+api.add_resource(PdfToWordResource, '/Androidpdftoword')
+api.add_resource(ResizePDF, '/resize-pdf')
+
+@app.route('/compressPdf',methods=['POST','GET'])
+def compressPdf():
+    from PyPDF2 import PdfReader,PdfWriter
     if request.method=='POST':
-        files = request.files['ppt_file']
-        tmpdirc = tempfile.mkdtemp()
+        files = request.files['pdf_file']
         if files.name=='':
             flash("No selected files")
-            return render_template('powerpoint to pdf preview.html')
+            return render_template("compress preview.html")
         else:
-            file_Path = os.path.join(tmpdirc,files.name)
-            files.save(file_Path)
-            presentation = Presentation(files)
-            pdf_file = files.name.replace(".pptx","pdf")
-            c = canvas.Canvas(pdf_file,pagesize=letter)
-            for slide in presentation.slides:
-                image = slide.get_image()
-                c.drawImage(image,0,0,width=letter[0],height=letter[1])
-            c.save(file_Path)    
+            tmpdirc = tempfile.mkdtemp()
+            file_path = os.path.join(tmpdirc,files.name)
+            files.save(file_path)
+            reader = PdfReader(file_path)
+            writer = PdfWriter()
+            for page in reader.pages:
+                compressed_content_streams = []
+                for content_stream in page.compressContentStreams:
+                    compressed_content_streams.append(content_stream.compress())
+                page.content_streams = compressed_content_streams
+                writer.add_page(page)
 
-        # print("ppptptptt")
-        # return "working"
-            return send_from_directory(tmpdirc,os.path.basename(file_Path),as_attachment=True)
+            compressed_file_name = f"compressed{files.name}.pdf"
+            compressed_file_path = os.path.join(tmpdirc, compressed_file_name)
 
-    
+            with open(compressed_file_path, "wb") as f:
+                writer.write(f)
+                #  return render_template("downsite.html")
+            return send_from_directory(tmpdirc, os.path.basename(compressed_file_path), as_attachment=True)
 
 @app.route('/encryptPdf',methods=['POST','GET'])
 def encryptpdf():
@@ -161,8 +256,8 @@ def split():
 
 @app.route('/merge')
 def merge():
-         return render_template("downsite.html")
-    # return render_template("merge preview.html")
+        #  return render_template("downsite.html")
+    return render_template("merge preview.html")
 
 @app.route('/wordtopdf_Page')
 def wordtopdf_Page():
@@ -184,9 +279,7 @@ def emailLogin():
 
 @app.route('/compress')
 def compress():
-         return render_template("downsite.html")
-    # return render_template("compress preview.html")
-
+    return render_template("compress preview.html")
 # pdf to word
 @app.route('/PdftoWord')
 def PdftoWord():
@@ -292,4 +385,4 @@ def ocr():
     return render_template("ocr pdf preview.html")
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

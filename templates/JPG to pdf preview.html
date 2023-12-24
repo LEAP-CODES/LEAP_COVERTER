@@ -590,8 +590,28 @@
                     <p>or</p>
                     <form action = "/imgIntopdf" method = "post" enctype="multipart/form-data">    
                         <input type="file" name="imagefile" id="imagefile" accept="image/png, image/jpeg ">
-                        <button class="btn split-button " type="submit" id="spl">Convert To PDF</button>
+                        <button class="btn split-button " type="submit" id="spl" disabled>Convert To PDF</button>
                     </form>    
+                    <script>
+                        const fileInput = document.getElementById("imagefile");
+                        const submitButton = document.getElementById("spl");
+                        const myForm = document.getElementById("myForm");
+
+                        fileInput.addEventListener("change", function() {
+                        if (fileInput.files.length > 0) {
+                            submitButton.disabled = false;
+                        } else {
+                            submitButton.disabled = true;
+                        }
+                        });
+
+                        myForm.addEventListener("submit", function(event) {
+                        if (fileInput.files.length === 0) {
+                            event.preventDefault();
+                            alert("Please select a file before submitting.");
+                        }
+                        });    
+                    </script>
                 </div>
 
             </div>

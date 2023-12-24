@@ -344,9 +344,29 @@
                     <i class="fa fa-upload" aria-hidden="true"></i>
                     <p>or</p>
                     <form action = "/PdfIntoword" method = "post" enctype="multipart/form-data">
-                        <input type="file" name="pdffile" accept=".pdf">
-                        <button id="compressButton" class="btn btn-darkred" type="submit">Convert to Word</button>
+                        <input type="file" name="pdffile" accept=".pdf" id="fileInput">
+                        <button id="compressButton" class="btn-dark" type="submit" disabled>Convert to Word</button>
                     </form>
+                    <script>
+                        const fileInput = document.getElementById("fileInput");
+                        const submitButton = document.getElementById("compressButton");
+                        const myForm = document.getElementById("myForm");
+
+                        fileInput.addEventListener("change", function() {
+                        if (fileInput.files.length > 0) {
+                            submitButton.disabled = false;
+                        } else {
+                            submitButton.disabled = true;
+                        }
+                        });
+
+                        myForm.addEventListener("submit", function(event) {
+                        if (fileInput.files.length === 0) {
+                            event.preventDefault();
+                            alert("Please select a file before submitting.");
+                        }
+                        });
+                    </script>
                 </div>
 
             </div>

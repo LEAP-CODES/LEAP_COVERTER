@@ -426,8 +426,37 @@
                     <form action="/decryptPdf" method="post" enctype="multipart/form-data">       
                         <input type="file" id="file-input" name="pdf_file" accept=".pdf ">
                         <input type="password" name="password" id="repeatPassword" placeholder="Enter your password">
-                        <button id="convertToPDFButton" type="submit">Unlock PDF</button>
+                        <button id="convertToPDFButton" type="submit" disabled>Unlock PDF</button>
                     </form>    
+                    <script>
+                        const fileInpt = document.getElementById("file-input");
+                        const passwordInput = document.getElementById("repeatPassword");
+                        const submitButton = document.getElementById("convertToPDFButton");
+                        const myForm = document.getElementById("myForm");
+                    
+                        fileInpt.addEventListener("change", function() {
+                            if (fileInpt.files.length > 0 && passwordInput.value !== "") {
+                                submitButton.disabled = false;
+                            } else {
+                                submitButton.disabled = true;
+                            }
+                        });
+                    
+                        passwordInput.addEventListener("input", function() {
+                            if (fileInpt.files.length > 0 && passwordInput.value !== "") {
+                                submitButton.disabled = false;
+                            } else {
+                                submitButton.disabled = true;
+                            }
+                        });
+                    
+                        myForm.addEventListener("submit", function(event) {
+                            if (fileInpt.files.length === 0 || passwordInput.value === "") {
+                                event.preventDefault();
+                                alert("Please select a file and enter a password before submitting.");
+                            }
+                        });    
+                    </script>
                 </div>
 
             </div>
